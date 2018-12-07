@@ -2,8 +2,8 @@
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -28,7 +28,7 @@ subject to the following restrictions:
 #include "../../Utils/b3ResourcePath.h"
 #include "../../Utils/b3BulletDefaultFileIO.h"
 
-
+#include "../OpenGLWindow/ShapeData.h"
 
 #include "URDF2Bullet.h"  //for flags
 #include "../ImportMeshUtility/b3ImportMeshUtility.h"
@@ -85,7 +85,7 @@ BulletURDFInternalData
 		m_urdfParser.setGlobalScaling(scaling);
 	}
 
-	
+
 };
 
 void BulletURDFImporter::printTree()
@@ -143,7 +143,7 @@ bool BulletURDFImporter::loadURDF(const char* fileName, bool forceFixedBase)
 	b3FileUtils fu;
 
 	//bool fileFound = fu.findFile(fileName, relativeFileName, 1024);
-	bool fileFound = m_data->m_fileIO->findResourcePath(fileName, relativeFileName, 1024) > 0;
+	bool fileFound = m_data->m_fileIO->findResourcePath(fileName, relativeFileName, 1024);
 
 	std::string xml_string;
 
@@ -160,11 +160,11 @@ bool BulletURDFImporter::loadURDF(const char* fileName, bool forceFixedBase)
 
 		//read file
 		int fileId = m_data->m_fileIO->fileOpen(relativeFileName,"r");
-		
+
 
 		char destBuffer[8192];
 		char* line = 0;
-		do 
+		do
 		{
 			line = m_data->m_fileIO->readLine(fileId, destBuffer, 8192);
 			if (line)
@@ -190,7 +190,7 @@ bool BulletURDFImporter::loadURDF(const char* fileName, bool forceFixedBase)
 	BulletErrorLogger loggie;
 	m_data->m_urdfParser.setParseSDF(false);
 	bool result = false;
-	
+
 	if (xml_string.length())
 	{
 			result = m_data->m_urdfParser.loadUrdf(xml_string.c_str(), &loggie, forceFixedBase, (m_data->m_flags & CUF_PARSE_SENSORS));
@@ -217,7 +217,7 @@ bool BulletURDFImporter::loadSDF(const char* fileName, bool forceFixedBase)
 	b3FileUtils fu;
 
 	//bool fileFound = fu.findFile(fileName, relativeFileName, 1024);
-	bool fileFound = (m_data->m_fileIO->findResourcePath(fileName, relativeFileName, 1024)) > 0;
+	bool fileFound = (m_data->m_fileIO->findResourcePath(fileName, relativeFileName, 1024));
 
 	std::string xml_string;
 
@@ -235,10 +235,10 @@ bool BulletURDFImporter::loadSDF(const char* fileName, bool forceFixedBase)
 
 		//read file
 		int fileId = m_data->m_fileIO->fileOpen(relativeFileName,"r");
-		
+
 		char destBuffer[8192];
 		char* line = 0;
-		do 
+		do
 		{
 			line = m_data->m_fileIO->readLine(fileId, destBuffer, 8192);
 			if (line)
@@ -883,6 +883,15 @@ void BulletURDFImporter::convertURDFToVisualShapeInternal(const UrdfVisual* visu
 
 	switch (visual->m_geometry.m_type)
 	{
+        case URDF_GEOM_CAPSULE:
+        {
+           btScalar radius = visual->m_geometry.m_capsuleRadius;
+			btScalar height = visual->m_geometry.m_capsuleHeight;
+			btCapsuleShapeZ* capsuleShape = new btCapsuleShapeZ(radius, height);
+			convexColShape = capsuleShape;
+			convexColShape->setMargin(gUrdfDefaultCollisionMargin);
+            break;
+        }
 		case URDF_GEOM_CYLINDER:
 		{
 			btAlignedObjectArray<btVector3> vertices;
@@ -910,10 +919,40 @@ void BulletURDFImporter::convertURDFToVisualShapeInternal(const UrdfVisual* visu
 		case URDF_GEOM_BOX:
 		{
 			btVector3 extents = visual->m_geometry.m_boxSize;
-			btBoxShape* boxShape = new btBoxShape(extents * 0.5f);
-			//btConvexShape* boxShape = new btConeShapeX(extents[2]*0.5,extents[0]*0.5);
-			convexColShape = boxShape;
-			convexColShape->setMargin(gUrdfDefaultCollisionMargin);
+			int strideInBytes = 9 * sizeof(float);
+			int numVertices = sizeof(cube_vertices_textured) / strideInBytes;
+			int numIndices = sizeof(cube_indices) / sizeof(int);
+			glmesh = new GLInstanceGraphicsShape;
+			glmesh->m_indices = new b3AlignedObjectArray<int>();
+			glmesh->m_vertices = new b3AlignedObjectArray<GLInstanceVertex>();
+			glmesh->m_indices->resize(numIndices);
+			for (int k = 0; k < numIndices; k++)
+			{
+				glmesh->m_indices->at(k) = cube_indices[k];
+			}
+			glmesh->m_vertices->resize(numVertices);
+
+			btScalar halfExtentsX = extents[0] * 0.5;
+			btScalar halfExtentsY = extents[1] * 0.5;
+			btScalar halfExtentsZ = extents[2] * 0.5;
+			GLInstanceVertex* verts = &glmesh->m_vertices->at(0);
+			btScalar textureScaling = 1;
+
+			for (int i = 0; i < numVertices; i++)
+			{
+				verts[i].xyzw[0] = halfExtentsX * cube_vertices_textured[i * 9];
+				verts[i].xyzw[1] = halfExtentsY * cube_vertices_textured[i * 9 + 1];
+				verts[i].xyzw[2] = halfExtentsZ * cube_vertices_textured[i * 9 + 2];
+				verts[i].xyzw[3] = cube_vertices_textured[i * 9 + 3];
+				verts[i].normal[0] = cube_vertices_textured[i * 9 + 4];
+				verts[i].normal[1] = cube_vertices_textured[i * 9 + 5];
+				verts[i].normal[2] = cube_vertices_textured[i * 9 + 6];
+				verts[i].uv[0] = cube_vertices_textured[i * 9 + 7] * textureScaling;
+				verts[i].uv[1] = cube_vertices_textured[i * 9 + 8] * textureScaling;
+			}
+			
+			glmesh->m_numIndices = numIndices;
+			glmesh->m_numvertices = numVertices;
 			break;
 		}
 
@@ -932,7 +971,7 @@ void BulletURDFImporter::convertURDFToVisualShapeInternal(const UrdfVisual* visu
 			{
 				case UrdfGeometry::FILE_OBJ:
 				{
-					
+
 					if (b3ImportMeshUtility::loadAndRegisterMeshFromFileInternal(visual->m_geometry.m_meshFileName, meshData, m_data->m_fileIO))
 					{
 						if (meshData.m_textureImage1)
@@ -1093,8 +1132,10 @@ void BulletURDFImporter::convertURDFToVisualShapeInternal(const UrdfVisual* visu
 				vtx.normal[0] = pos.x();
 				vtx.normal[1] = pos.y();
 				vtx.normal[2] = pos.z();
-				vtx.uv[0] = 0.5f;
-				vtx.uv[1] = 0.5f;
+				btScalar u = btAtan2(vtx.normal[0], vtx.normal[2]) / (2 * SIMD_PI) + 0.5;
+				btScalar v = vtx.normal[1] * 0.5 + 0.5;
+				vtx.uv[0] = u;
+				vtx.uv[1] = v;
 				glmesh->m_vertices->push_back(vtx);
 			}
 
@@ -1172,7 +1213,7 @@ int BulletURDFImporter::convertLinkVisualShapes(int linkIndex, const char* pathP
 						(meshData.m_flags & B3_IMPORT_MESH_HAS_SPECULAR_COLOR))
 				{
 					UrdfMaterialColor matCol;
-					
+
 					if (m_data->m_flags&CUF_USE_MATERIAL_TRANSPARANCY_FROM_MTL)
 					{
 						matCol.m_rgbaColor.setValue(meshData.m_rgbaColor[0],
@@ -1186,7 +1227,7 @@ int BulletURDFImporter::convertLinkVisualShapes(int linkIndex, const char* pathP
 									meshData.m_rgbaColor[2],
 									1);
 					}
-					
+
 					matCol.m_specularColor.setValue(meshData.m_specularColor[0],
 						meshData.m_specularColor[1],
 						meshData.m_specularColor[2]);
@@ -1204,7 +1245,7 @@ int BulletURDFImporter::convertLinkVisualShapes(int linkIndex, const char* pathP
 					m_data->m_linkColors.insert(linkIndex, matCol);
 				}
 			}
-			
+
 		}
 	}
 	if (vertices.size() && indices.size())

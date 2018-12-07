@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -x
+set -ex
 
 cmake -DUSE_DOUBLE_PRECISION=ON \
 -DBUILD_SHARED_LIBS=OFF \

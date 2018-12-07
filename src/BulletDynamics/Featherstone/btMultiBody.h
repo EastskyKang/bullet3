@@ -235,8 +235,10 @@ public:
 
 	void setJointPos(int i, btScalar q);
 	void setJointVel(int i, btScalar qdot);
-	void setJointPosMultiDof(int i, btScalar *q);
-	void setJointVelMultiDof(int i, btScalar *qdot);
+	void setJointPosMultiDof(int i, const double *q);
+	void setJointVelMultiDof(int i, const double *qdot);
+	void setJointPosMultiDof(int i, const float *q);
+	void setJointVelMultiDof(int i, const float *qdot);
 
 	//
 	// direct access to velocities as a vector of 6 + num_links elements.
@@ -338,17 +340,20 @@ public:
 															  btAlignedObjectArray<btScalar> & scratch_r,
 															  btAlignedObjectArray<btVector3> & scratch_v,
 															  btAlignedObjectArray<btMatrix3x3> & scratch_m,
-															  bool isConstraintPass = false);
+															  bool isConstraintPass,
+                                                              bool jointFeedbackInWorldSpace,
+                                                              bool jointFeedbackInJointFrame
+                                                              );
 
 	///stepVelocitiesMultiDof is deprecated, use computeAccelerationsArticulatedBodyAlgorithmMultiDof instead
-	void stepVelocitiesMultiDof(btScalar dt,
-								btAlignedObjectArray<btScalar> & scratch_r,
-								btAlignedObjectArray<btVector3> & scratch_v,
-								btAlignedObjectArray<btMatrix3x3> & scratch_m,
-								bool isConstraintPass = false)
-	{
-		computeAccelerationsArticulatedBodyAlgorithmMultiDof(dt, scratch_r, scratch_v, scratch_m, isConstraintPass);
-	}
+	//void stepVelocitiesMultiDof(btScalar dt,
+	//							btAlignedObjectArray<btScalar> & scratch_r,
+	//							btAlignedObjectArray<btVector3> & scratch_v,
+	//							btAlignedObjectArray<btMatrix3x3> & scratch_m,
+	//							bool isConstraintPass = false)
+	//{
+	//	computeAccelerationsArticulatedBodyAlgorithmMultiDof(dt, scratch_r, scratch_v, scratch_m, isConstraintPass, false, false);
+	//}
 
 	// calcAccelerationDeltasMultiDof
 	// input: force vector (in same format as jacobian, i.e.:
@@ -594,6 +599,15 @@ public:
 	{
 		m_userIndex2 = index;
 	}
+
+	static void spatialTransform(const btMatrix3x3 &rotation_matrix,  // rotates vectors in 'from' frame to vectors in 'to' frame
+		const btVector3 &displacement,     // vector from origin of 'from' frame to origin of 'to' frame, in 'to' coordinates
+		const btVector3 &top_in,       // top part of input vector
+		const btVector3 &bottom_in,    // bottom part of input vector
+		btVector3 &top_out,         // top part of output vector
+		btVector3 &bottom_out);      // bottom part of output vector
+
+
 
 private:
 	btMultiBody(const btMultiBody &);     // not implemented

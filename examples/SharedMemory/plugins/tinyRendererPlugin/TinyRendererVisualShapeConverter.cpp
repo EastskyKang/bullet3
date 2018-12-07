@@ -32,7 +32,7 @@ subject to the following restrictions:
 #include "../SharedMemory/SharedMemoryPublic.h"  //for b3VisualShapeData
 #include "../TinyRenderer/model.h"
 #include "stb_image/stb_image.h"
-
+#include "../OpenGLWindow/ShapeData.h"
 struct MyTexture2
 {
 	unsigned char* textureData1;
@@ -293,10 +293,47 @@ static void convertURDFToVisualShape(const UrdfShape* visual, const char* urdfPa
 
 			btVector3 extents = visual->m_geometry.m_boxSize;
 
-			btBoxShape* boxShape = new btBoxShape(extents * 0.5f);
-			//btConvexShape* boxShape = new btConeShapeX(extents[2]*0.5,extents[0]*0.5);
-			convexColShape = boxShape;
-			convexColShape->setMargin(0.001);
+			
+			int strideInBytes = 9 * sizeof(float);
+			int numVertices = sizeof(cube_vertices_textured) / strideInBytes;
+			int numIndices = sizeof(cube_indices) / sizeof(int);
+
+			glmesh = new GLInstanceGraphicsShape;
+			//		int index = 0;
+			glmesh->m_indices = new b3AlignedObjectArray<int>();
+			glmesh->m_vertices = new b3AlignedObjectArray<GLInstanceVertex>();
+
+			glmesh->m_indices->resize(numIndices);
+			for (int k = 0; k < numIndices; k++)
+			{
+				glmesh->m_indices->at(k) = cube_indices[k];
+			}
+			glmesh->m_vertices->resize(numVertices);
+
+			btScalar halfExtentsX = extents[0] * 0.5;
+			btScalar halfExtentsY = extents[1] * 0.5;
+			btScalar halfExtentsZ = extents[2] * 0.5;
+			GLInstanceVertex* verts = &glmesh->m_vertices->at(0);
+			btScalar textureScaling = 1;
+
+			for (int i = 0; i < numVertices; i++)
+			{
+
+				verts[i].xyzw[0] = halfExtentsX * cube_vertices_textured[i * 9];
+				verts[i].xyzw[1] = halfExtentsY * cube_vertices_textured[i * 9 + 1];
+				verts[i].xyzw[2] = halfExtentsZ * cube_vertices_textured[i * 9 + 2];
+				verts[i].xyzw[3] = cube_vertices_textured[i * 9 + 3];
+				verts[i].normal[0] = cube_vertices_textured[i * 9 + 4];
+				verts[i].normal[1] = cube_vertices_textured[i * 9 + 5];
+				verts[i].normal[2] = cube_vertices_textured[i * 9 + 6];
+				verts[i].uv[0] = cube_vertices_textured[i * 9 + 7] * textureScaling;
+				verts[i].uv[1] = cube_vertices_textured[i * 9 + 8] * textureScaling;
+			}
+
+			glmesh->m_numIndices = numIndices;
+			glmesh->m_numvertices = numVertices;
+
+			
 			break;
 		}
 		case URDF_GEOM_SPHERE:
@@ -320,6 +357,10 @@ static void convertURDFToVisualShape(const UrdfShape* visual, const char* urdfPa
 
 			switch (visual->m_geometry.m_meshFileType)
 			{
+				case UrdfGeometry::MEMORY_VERTICES:
+				{
+					break;
+				}
 				case UrdfGeometry::FILE_OBJ:
 				{
 					//glmesh = LoadMeshFromObj(fullPath,visualPathPrefix);
@@ -442,8 +483,10 @@ static void convertURDFToVisualShape(const UrdfShape* visual, const char* urdfPa
 				}
 
 				default:
-					// should never get here (findExistingMeshFile returns false if it doesn't recognize extension)
-					btAssert(0);
+					{
+						// should never get here (findExistingMeshFile returns false if it doesn't recognize extension)
+						btAssert(0);
+					}
 			}
 
 			if (glmesh && glmesh->m_vertices && (glmesh->m_numvertices > 0))
@@ -458,7 +501,10 @@ static void convertURDFToVisualShape(const UrdfShape* visual, const char* urdfPa
 			}
 			else
 			{
-				b3Warning("issue extracting mesh from COLLADA/STL file %s\n", visual->m_geometry.m_meshFileName.c_str());
+				if (visual->m_geometry.m_meshFileType !=UrdfGeometry::MEMORY_VERTICES)
+				{
+					b3Warning("issue extracting mesh from COLLADA/STL file %s\n", visual->m_geometry.m_meshFileName.c_str());
+				}
 			}
 			break;
 		}  // case mesh
@@ -1224,6 +1270,7 @@ int TinyRendererVisualShapeConverter::loadTextureFile(const char* filename, stru
 					buffer.resize(0);
 				}
 			}
+			fileIO->fileClose(fileId);
 		}
 		if (buffer.size())
 		{
