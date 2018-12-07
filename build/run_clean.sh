@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-set -x
+set -xe
 
 shopt -s extglob
 
-rm -r !(clean.sh|run_build.sh)
+rm -r !(run_clean.sh|run_build.sh)
